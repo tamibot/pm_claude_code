@@ -1,140 +1,113 @@
-# Integrations Setup Guide
+# ⚡ Integraciones — Setup para Claude Code
 
-## Overview
+## Resumen
 
-The PM agent needs 4 integrations to work effectively. Two require browser access and two use native API connections.
+Claude Code necesita 4 integraciones para funcionar como PM:
 
-```
-+-------------------+     +-------------------+
-| Browser-Based     |     | Native API (MCP)  |
-|                   |     |                   |
-| - WhatsApp Web    |     | - Gmail API       |
-| - LinkedIn        |     | - Google Calendar |
-+-------------------+     +-------------------+
-         |                          |
-         v                          v
-+-------------------------------------------+
-|          AI Agent (Claude Code)            |
-|  - Reads/writes to PostgreSQL             |
-|  - Generates tasks, drafts, briefings     |
-+-------------------------------------------+
-```
+| Integracion | Metodo | Para que |
+|-------------|--------|----------|
+| 📧 Gmail | MCP Nativo (OAuth) | Leer/buscar correos + crear borradores |
+| 📅 Calendar | MCP Nativo (OAuth) | Leer eventos + verificar disponibilidad |
+| 📱 WhatsApp | Chrome MCP (browser) | Revisar chats via web.whatsapp.com |
+| 🗄️ PostgreSQL | Conexion directa | Leer/escribir todas las tablas |
 
-## 1. WhatsApp Web (Browser)
-
-### How it works
-The AI agent opens WhatsApp Web in a browser tab and navigates through chats using automation (clicks, scrolls, screenshots).
-
-### Setup Steps
-1. Open your browser (Chrome recommended)
-2. Navigate to `https://web.whatsapp.com/`
-3. Scan the QR code with your phone
-4. Keep the session active
-
-### Agent Behavior
-- Uses the `whatsapp_exclusions` table to skip personal/community chats
-- Reads messages from the most recent first
-- Identifies action items by context (questions, requests, mentions)
-- Registers new contacts in `whatsapp_contacts`
-- Saves key messages in `whatsapp_messages`
-
-### Exclusion Types
-| Type | Example | Description |
-|------|---------|-------------|
-| `personal` | Family groups, friends | Skip completely |
-| `comunidad` | n8n, Kommo, GHL groups | Community chats, skip |
-| `social` | Padel, parties, events | Social groups, skip |
-| `spam` | Promotions, banks, bots | Promotional messages |
-| `operadora` | Movistar, Entel | Carrier messages |
-
-### Important Rules
-- **NEVER send messages** without explicit user confirmation
-- **Always check exclusion list** before reviewing a chat
-- **Register action items** as tasks when they require follow-up
-- **Record unknown numbers** with suggested names
-
-## 2. Gmail (Native MCP)
-
-### How it works
-Claude Code connects directly to Gmail via OAuth MCP. This provides full API access without needing the browser.
+## 1. 📧 Gmail MCP (Nativo)
 
 ### Setup
-In Claude Code, enable the Gmail MCP integration:
-1. Open Claude Code settings
-2. Go to MCP Servers
-3. Enable Gmail integration
-4. Authorize with your Google account
+1. En Claude Code, ve a **Settings → MCP Servers**
+2. Habilita **Gmail**
+3. Autoriza con tu cuenta Google (OAuth)
 
-### Agent Capabilities
-- `gmail_search_messages` - Search with Gmail query syntax
-- `gmail_read_message` - Read full email content
-- `gmail_create_draft` - Create email drafts (never send directly)
-- `gmail_list_labels` - List available labels
-- `gmail_get_profile` - Get account info
+### Que puede hacer el agente
+- `gmail_search_messages` — Buscar con sintaxis Gmail (`is:unread`, `from:`, `after:`)
+- `gmail_read_message` — Leer contenido completo de un email
+- `gmail_create_draft` — Crear borrador (NUNCA envia directo)
+- `gmail_get_profile` — Ver cuenta conectada
 
-### Email Classification
-| Type | Action | Example |
-|------|--------|---------|
-| `work` | Register + create task | Client requests, follow-ups |
-| `report` | Register | Automated reports, analytics |
-| `notification` | Register if relevant | Payment receipts, alerts |
-| `newsletter` | Skip | Marketing emails |
-| `spam` | Skip | Promotions |
+### Busquedas utiles
+```
+# Correos no leidos de trabajo
+is:unread -category:promotions -category:social after:2026/04/01
 
-## 3. Google Calendar (Native MCP)
+# Correos enviados a alguien (verificar respuesta)
+in:sent to:contacto@email.com after:2026/03/15
+
+# Correos de un cliente especifico
+from:jorge@cliente.com OR to:jorge@cliente.com
+```
+
+## 2. 📅 Google Calendar MCP (Nativo)
 
 ### Setup
-Same as Gmail - enable Google Calendar MCP in Claude Code settings.
+1. En Claude Code, ve a **Settings → MCP Servers**
+2. Habilita **Google Calendar**
+3. Autoriza con tu cuenta Google
 
-### Agent Capabilities
-- `gcal_list_events` - List events in a time range
-- `gcal_create_event` - Create new events
-- `gcal_find_meeting_times` - Find available slots
-- `gcal_find_my_free_time` - Check your availability
+### Que puede hacer el agente
+- `gcal_list_events` — Listar eventos de un rango de fechas
+- `gcal_create_event` — Crear eventos
+- `gcal_find_meeting_times` — Buscar horarios disponibles
+- `gcal_find_my_free_time` — Ver tiempo libre
 
-### Daily Usage
-The agent checks the calendar every morning to:
-1. List today's meetings with context
-2. Identify conflicts
-3. Prepare talking points for each meeting
-4. Cross-reference with pending tasks per client
+### Uso diario
+Cada manana el agente consulta:
+```
+gcal_list_events(timeMin="hoy", timeMax="hoy+1", timeZone="America/Lima")
+```
+Y genera la agenda del dia con participantes, links de Meet, y contexto.
 
-## 4. PostgreSQL (Direct Connection)
+### Transcripciones de reuniones
+Si usas **tl;dv**, **Read.ai** o **Fireflies**, las notas llegan por correo. El agente puede:
+- Leerlas via Gmail MCP
+- Extraer action items
+- Crear tareas automaticamente en la BD
+
+## 3. 📱 WhatsApp Web (Chrome MCP)
+
+### Setup
+1. Instala la extension **Claude in Chrome**
+2. Abre Chrome y navega a `https://web.whatsapp.com/`
+3. Escanea el QR code con tu telefono
+4. **Manten la sesion abierta** mientras Claude Code trabaja
+
+### Que puede hacer el agente
+- Navegar por la lista de chats
+- Filtrar por "No leidos", "Grupos", etc.
+- Abrir chats individuales y leer mensajes
+- Scrollear por el historial
+- Tomar screenshots para analizar contenido visual
+- **NO puede enviar mensajes** (solo propone borradores)
+
+### Limitaciones
+- Requiere sesion activa en Chrome
+- Si WhatsApp se desconecta, el agente no puede revisar
+- No tiene acceso a llamadas ni videollamadas
+- Los mensajes de media (fotos, audios) se ven pero no se pueden transcribir directamente
+
+## 4. 🗄️ PostgreSQL (Conexion Directa)
 
 ### Setup
 ```bash
-# .env file
+# .env
 DATABASE_URL=postgresql://user:password@host:port/database
-ENCRYPTION_KEY=your-fernet-key-here
+ENCRYPTION_KEY=tu-clave-fernet-aqui
 ```
 
-### Connection Pattern
+El agente ejecuta queries SQL directamente via Python (`psycopg2`).
+
+### Patron de conexion
 ```python
-import psycopg2
-from contextlib import contextmanager
+from db.connection import get_db
 
-@contextmanager
-def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+with get_db() as conn:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM tasks WHERE status = 'Pendiente'")
+    rows = cur.fetchall()
 ```
 
-## Alternative: Browser-Only Mode
-
-If your AI tool doesn't support native MCP integrations, you can use browser automation for everything:
-
-| Integration | Native MCP | Browser Alternative |
-|-------------|-----------|-------------------|
-| WhatsApp | N/A (browser only) | Open web.whatsapp.com |
-| Gmail | Gmail MCP | Open mail.google.com |
-| Calendar | Calendar MCP | Open calendar.google.com |
-| Database | psycopg2 | Use a DB admin UI like pgAdmin |
-
-The agent will use screenshots, clicks, and keyboard input to interact with each service through the browser.
+### Proveedores recomendados
+| Proveedor | Ventaja | Costo |
+|-----------|---------|-------|
+| **Railway** | Deploy rapido, SSL incluido | Desde $5/mes |
+| **Supabase** | UI web, API REST gratis | Free tier generoso |
+| **Local** | Sin costo, control total | Gratis |
